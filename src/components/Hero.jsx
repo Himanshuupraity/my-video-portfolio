@@ -4,14 +4,146 @@ import 'aos/dist/aos.css';
 import heroVideo from '../assets/hero video/himanshu-hero.mp4';
 import { heroContent, socialLinks } from '../data/portfolioData';
 
-// Centre of the laptop lid, as a fraction of the video frame.
+// Points of interest in the video frame, as fractions of its 1920x1080 size.
 const LAPTOP_FOCUS = { x: 0.830, y: 0.735 };
+const FACE_FOCUS = { x: 0.385, y: 0.275 };
+
+// Fallback until the video reports its own dimensions, so the control is placed
+// correctly on first paint rather than waiting on metadata.
+const VIDEO_ASPECT = 16 / 9;
+
+// Below this width/height ratio, cover crops so much off the sides that the
+// default 50% object-position pushes the face to the very edge of the frame —
+// a phone in portrait shows it about 36px from the left. Narrower than this we
+// centre the face instead; wider viewports keep the default, which already
+// frames both the face and the laptop the play control pins to.
+const FACE_CENTRE_MAX_RATIO = 1.2;
+
+// Where the video sits inside the section, and where the frame's points of
+// interest land on screen. Shared by the initial state and every resize so the
+// object-position and the pinned control can never disagree.
+const coverGeometry = (width, height, videoAspect) => {
+  let renderedW, renderedH;
+
+  if (width / height > videoAspect) {
+    renderedW = width;
+    renderedH = width / videoAspect;
+  } else {
+    renderedH = height;
+    renderedW = height * videoAspect;
+  }
+
+  // Centre the face horizontally only when the crop is severe enough to have
+  // shoved it aside, and only when there is slack to shift it with.
+  const slackX = width - renderedW;
+  const objectX =
+    width / height < FACE_CENTRE_MAX_RATIO && slackX < -40
+      ? Math.min(Math.max((width / 2 - FACE_FOCUS.x * renderedW) / slackX, 0), 1)
+      : 0.5;
+
+  const offsetX = slackX * objectX;
+  const offsetY = (height - renderedH) / 2;
+
+  return {
+    objectPosition: `${(objectX * 100).toFixed(2)}% 50%`,
+    laptop: {
+      left: offsetX + LAPTOP_FOCUS.x * renderedW,
+      top: offsetY + LAPTOP_FOCUS.y * renderedH,
+    },
+  };
+};
+
+// Room the pinned control needs to keep clear of each edge: half the 80px
+// circle, plus the "Play" label below and the hint pill above.
+const SAFE = { x: 104, top: 116, bottom: 124 };
+
+// The play control sits on the laptop lid in the footage — a light, busy
+// backdrop that swallowed the old translucent button. Until the reel has been
+// played it wears brand red, a pulsing ring and a pointer label so it reads as
+// the one thing to click; afterwards it settles back to a quiet glass button.
+const PlayControl = ({ isPlaying, hasPlayed, onToggle, layout, style, hintAlign = 'center' }) => (
+  <div
+    style={style}
+    className={`cursor-pointer group motion-safe:animate-fade-in ${layout}`}
+    onClick={onToggle}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle(e);
+      }
+    }}
+    role="button"
+    tabIndex={0}
+    aria-label={isPlaying ? 'Pause the intro reel' : 'Play the intro reel'}
+  >
+    {!hasPlayed && (
+      <div
+        className={`absolute bottom-full mb-2 flex flex-col gap-1 pointer-events-none ${
+          hintAlign === 'left'
+            ? 'left-0 items-start'
+            : 'left-1/2 -translate-x-1/2 items-center'
+        }`}
+      >
+        <span className="whitespace-nowrap rounded-full bg-[#ff2a2a] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white shadow-lg shadow-black/50">
+          Watch my intro
+        </span>
+        <svg
+          className={`w-5 h-5 text-[#ff2a2a] motion-safe:animate-nudge-down drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] ${
+            hintAlign === 'left' ? 'ml-[18px] md:ml-[30px]' : ''
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 4v15m0 0l-6-6m6 6l6-6" />
+        </svg>
+      </div>
+    )}
+
+    <div className="relative">
+      {/* Pulsing ring — only before the first play, so it never nags. */}
+      {!hasPlayed && (
+        <span className="absolute inset-0 rounded-full bg-[#ff2a2a] opacity-60 motion-safe:animate-ping" />
+      )}
+      <div
+        className={`relative w-14 h-14 md:w-20 md:h-20 rounded-full flex justify-center items-center backdrop-blur-md transition-all duration-500 group-hover:scale-110 group-hover:bg-[#ff2a2a] group-hover:border-[#ff2a2a] group-hover:shadow-[0_0_40px_rgba(255,42,42,0.6)] ${
+          hasPlayed
+            ? 'border border-white/40 bg-black/40 shadow-[0_0_30px_rgba(0,0,0,0.45)]'
+            : 'border-2 border-white/70 bg-[#ff2a2a] shadow-[0_0_40px_rgba(255,42,42,0.55)]'
+        }`}
+      >
+        {!isPlaying ? (
+          // Play Icon
+          <svg className="w-6 h-6 md:w-8 md:h-8 text-white ml-0.5 md:ml-1" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        ) : (
+          // Pause Icon
+          <svg className="w-6 h-6 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+          </svg>
+        )}
+      </div>
+    </div>
+
+    <span className="text-white text-[10px] md:text-xs font-bold tracking-widest uppercase opacity-90 group-hover:opacity-100 transition-opacity drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+      {!isPlaying ? 'Play' : 'Pause'}
+    </span>
+  </div>
+);
 
 const Hero = () => {
   const videoRef = useRef(null);
   const sectionRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasPlayed, setHasPlayed] = useState(false);
   const [reelPos, setReelPos] = useState(null);
+  const [objectPosition, setObjectPosition] = useState(
+    () => coverGeometry(window.innerWidth, window.innerHeight, VIDEO_ASPECT).objectPosition
+  );
 
   useEffect(() => {
     AOS.init({
@@ -24,41 +156,55 @@ const Hero = () => {
 
   // The video is object-cover, so the laptop drifts as the viewport aspect
   // changes. Recompute the cover transform instead of hard-coding an offset.
+  //
+  // On a tall viewport, cover crops the sides so hard that the laptop sits
+  // hundreds of pixels outside the frame — every tablet in portrait, for
+  // instance. There is nothing to pin the control to there, so it falls back to
+  // sitting in the content flow instead of being positioned off-screen.
   useEffect(() => {
     const video = videoRef.current;
 
     const update = () => {
       const section = sectionRef.current;
-      if (!section || !video || !video.videoWidth) return;
+      if (!section) return;
 
       const { width, height } = section.getBoundingClientRect();
-      const videoAspect = video.videoWidth / video.videoHeight;
-      let renderedW, renderedH, offsetX, offsetY;
+      const videoAspect = video?.videoWidth
+        ? video.videoWidth / video.videoHeight
+        : VIDEO_ASPECT;
 
-      if (width / height > videoAspect) {
-        renderedW = width;
-        renderedH = width / videoAspect;
-        offsetX = 0;
-        offsetY = (height - renderedH) / 2;
-      } else {
-        renderedH = height;
-        renderedW = height * videoAspect;
-        offsetY = 0;
-        offsetX = (width - renderedW) / 2;
+      const geometry = coverGeometry(width, height, videoAspect);
+      setObjectPosition(geometry.objectPosition);
+
+      const { left, top } = geometry.laptop;
+
+      // Pin only when the laptop is genuinely in frame and clear of the copy on
+      // the left. A near miss is nudged back inside; a wild miss falls back.
+      const inFrame =
+        left <= width - 40 &&
+        left >= width * 0.56 &&
+        top >= 100 &&
+        top <= height - 60;
+
+      if (width < 768 || !inFrame) {
+        setReelPos(null);
+        return;
       }
 
       setReelPos({
-        left: offsetX + LAPTOP_FOCUS.x * renderedW,
-        top: offsetY + LAPTOP_FOCUS.y * renderedH,
+        left: Math.min(left, width - SAFE.x),
+        top: Math.min(Math.max(top, SAFE.top), height - SAFE.bottom),
       });
     };
 
     update();
     video?.addEventListener('loadedmetadata', update);
     window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
     return () => {
       video?.removeEventListener('loadedmetadata', update);
       window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
     };
   }, []);
 
@@ -88,9 +234,13 @@ const Hero = () => {
       <video
         ref={videoRef}
         playsInline
-        onPlay={() => setIsPlaying(true)}
+        onPlay={() => {
+          setIsPlaying(true);
+          setHasPlayed(true);
+        }}
         onPause={() => setIsPlaying(false)}
         onEnded={handleEnded}
+        style={{ objectPosition }}
         className="absolute top-0 left-0 w-full h-full object-cover z-0"
       >
         <source src={heroVideo} type="video/mp4" />
@@ -235,60 +385,29 @@ const Hero = () => {
           </div>
         </div>
 
-        {/* Play Video Button — mobile keeps its place in the flow, since the
-            laptop is cropped out of frame at narrow viewports. */}
-        <div 
-          data-aos="zoom-in"
-            data-aos-offset="0"
-          data-aos-delay="600"
-          className="md:hidden mt-8 flex flex-row items-center gap-2 cursor-pointer group self-start"
-          onClick={toggleVideo}
-        >
-          <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border border-white/30 bg-black/20 backdrop-blur-md flex justify-center items-center group-hover:scale-110 group-hover:bg-[#ff2a2a] transition-all duration-500 shadow-[0_0_30px_rgba(255,255,255,0.1)] group-hover:shadow-[0_0_40px_rgba(255,42,42,0.6)]">
-            {!isPlaying ? (
-              // Play Icon
-              <svg className="w-5 h-5 md:w-8 md:h-8 text-white ml-0.5 md:ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            ) : (
-              // Pause Icon
-              <svg className="w-5 h-5 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-              </svg>
-            )}
-          </div>
-          <span className="text-white text-[10px] md:text-xs font-bold tracking-widest uppercase opacity-70 group-hover:opacity-100 transition-opacity">
-            {!isPlaying ? "Play" : "Pause"}
-          </span>
-        </div>
+        {/* Play Video Button — in the flow whenever the laptop is cropped out of
+            frame (phones, and any tablet held in portrait). */}
+        {!reelPos && (
+          <PlayControl
+            isPlaying={isPlaying}
+            hasPlayed={hasPlayed}
+            onToggle={toggleVideo}
+            hintAlign="left"
+            layout="relative mt-20 md:mt-0 md:ml-8 flex flex-row items-center gap-3 self-start md:self-end shrink-0"
+          />
+        )}
       </div>
 
-      {/* Play Video Button — desktop, pinned to the laptop in the footage. */}
-      <div 
-        data-aos="zoom-in"
-            data-aos-offset="0"
-        data-aos-delay="600"
-        style={reelPos ? { left: reelPos.left, top: reelPos.top } : { left: '83%', top: '73.5%' }}
-        className="hidden md:flex absolute -translate-x-1/2 -translate-y-1/2 z-30 flex-col items-center gap-3 cursor-pointer group"
-        onClick={toggleVideo}
-      >
-          <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border border-white/30 bg-black/20 backdrop-blur-md flex justify-center items-center group-hover:scale-110 group-hover:bg-[#ff2a2a] transition-all duration-500 shadow-[0_0_30px_rgba(255,255,255,0.1)] group-hover:shadow-[0_0_40px_rgba(255,42,42,0.6)]">
-            {!isPlaying ? (
-              // Play Icon
-              <svg className="w-5 h-5 md:w-8 md:h-8 text-white ml-0.5 md:ml-1" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            ) : (
-              // Pause Icon
-              <svg className="w-5 h-5 md:w-8 md:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-              </svg>
-            )}
-          </div>
-          <span className="text-white text-[10px] md:text-xs font-bold tracking-widest uppercase opacity-70 group-hover:opacity-100 transition-opacity">
-            {!isPlaying ? "Play" : "Pause"}
-          </span>
-        </div>
+      {/* Play Video Button — pinned to the laptop whenever it is in frame. */}
+      {reelPos && (
+        <PlayControl
+          isPlaying={isPlaying}
+          hasPlayed={hasPlayed}
+          onToggle={toggleVideo}
+          style={{ left: reelPos.left, top: reelPos.top }}
+          layout="absolute -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-3"
+        />
+      )}
 
       {/* Scroll Indicator */}
       <div 

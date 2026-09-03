@@ -7,6 +7,28 @@
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-20px); }
   }
+
+  /* Entrance for the hero play control. Deliberately opacity-only: the pinned
+     variant is centred with translate utilities, so animating transform here
+     would fight them. Owned by CSS rather than AOS, because AOS starts the
+     element at opacity 0 and needs its scroll handler to run before clearing
+     it — which never happened on slow connections, leaving the control
+     invisible. Essential UI must not depend on a reveal library. */
+  --animate-fade-in: fade-in 0.5s ease-out 0.45s both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Pointer that draws the eye to the hero play control. Softer than
+     animate-bounce, which reads as too frantic next to the pulsing ring. */
+  --animate-nudge-down: nudge-down 1.6s ease-in-out infinite;
+
+  @keyframes nudge-down {
+    0%, 100% { transform: translateY(0); opacity: 0.8; }
+    50% { transform: translateY(7px); opacity: 1; }
+  }
 }
 
 html {
