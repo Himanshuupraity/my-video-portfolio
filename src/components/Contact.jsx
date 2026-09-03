@@ -79,8 +79,10 @@ const Contact = () => {
       setStatus('success');
       formRef.current.reset();
     } catch (error) {
+      // EmailJS error text names dashboard URLs and config IDs — keep it in the
+      // console and show the visitor something they can actually act on.
       console.error('EmailJS Error:', error);
-      setErrorMsg(error?.text || 'Something went wrong. Please email me directly.');
+      setErrorMsg(`Something went wrong. Please email me directly at ${personalInfo.emails.primary}.`);
       setStatus('error');
     }
 

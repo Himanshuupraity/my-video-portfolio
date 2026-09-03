@@ -325,8 +325,14 @@ export const footerContent = {
 
 // EmailJS Configuration
 // Will read directly from environment variables in Vite (starting with VITE_)
+// Trimmed because a value pasted into a hosting dashboard can carry a trailing
+// newline, and EmailJS rejects the key outright if one slips through.
+// Keys are read statically: Vite only substitutes literal import.meta.env.VITE_*
+// references, so dynamic lookups would come back undefined in a production build.
+const clean = (value, fallback) => (value || "").trim() || fallback;
+
 export const emailjsConfig = {
-  serviceId: import.meta.env.VITE_EMAILJS_SERVICE_ID || "YOUR_EMAILJS_SERVICE_ID",
-  templateId: import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "YOUR_EMAILJS_TEMPLATE_ID",
-  publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "YOUR_EMAILJS_PUBLIC_KEY",
+  serviceId: clean(import.meta.env.VITE_EMAILJS_SERVICE_ID, "YOUR_EMAILJS_SERVICE_ID"),
+  templateId: clean(import.meta.env.VITE_EMAILJS_TEMPLATE_ID, "YOUR_EMAILJS_TEMPLATE_ID"),
+  publicKey: clean(import.meta.env.VITE_EMAILJS_PUBLIC_KEY, "YOUR_EMAILJS_PUBLIC_KEY"),
 };
